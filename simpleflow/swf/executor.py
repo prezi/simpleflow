@@ -373,6 +373,7 @@ class Executor(executor.Executor):
         return [decision], {}
 
     def on_failure(self, reason, details=None):
+        self._workflow.alert_on_failure(self, reason)
         try:
             self._workflow.on_failure(self._history, reason, details)
         except NotImplementedError:
