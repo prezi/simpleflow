@@ -112,7 +112,7 @@ setup(
     test_suite='tests',
     tests_require=[
         'pytest',
-        'moto>=0.4.19',
+        'moto>=0.4.23',
     ],
     cmdclass={'test': PyTest},
     entry_points={
