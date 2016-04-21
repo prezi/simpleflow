@@ -4,7 +4,8 @@ import smtplib
 from email.mime.text import MIMEText
 
 
-WORKFLOW_TEMPLATE = """
+NOT_FOUND = "not found"
+MESSAGE_TEMPLATE = """
 SWF Console: https://console.aws.amazon.com/swf/home?{swf_params}
 
 ## Message
@@ -25,23 +26,27 @@ def _make_flatten_context(context, depth=0):
     return msg
 
 
-def make_alert_message(workflow_execution, context, message):
+def make_alert_message(executor, context, message):
     msg = ""
 
     # Try to make the message even with missing information when the workflow
     # execution could not be retrieved.
-    if workflow_execution is None:
+    if executor is None:
         region_name = NOT_FOUND
         domain_name = NOT_FOUND
         workflow_id = NOT_FOUND
         raw_run_id = NOT_FOUND
         run_id = NOT_FOUND
     else:
-        region_name = workflow_execution.connection.region.name
-        domain_name = workflow_execution.domain.name
-        workflow_id = workflow_execution.workflow_id
-        raw_run_id = workflow_execution.run_id
-        run_id = raw_run_id[:-1] + '!='
+        region_name = executor.domain.region
+        domain_name = executor.domain.name
+        # TODO: add workflow_id/run_id ; not exposed for now
+        # workflow_id = executor.workflow_id
+        # raw_run_id = executor.run_id
+        # run_id = raw_run_id[:-1] + '!='
+        workflow_id = NOT_FOUND
+        raw_run_id = NOT_FOUND
+        run_id = NOT_FOUND
 
     swf_params = "region={}#execution_summary:domain={};workflowId={};runId={}".format(
         region_name, domain_name, workflow_id, run_id)
@@ -49,7 +54,7 @@ def make_alert_message(workflow_execution, context, message):
     msg = MESSAGE_TEMPLATE.format(
         message=message,
         swf_params=swf_params,
-        context_flatten=_make_flatten_context(content)
+        context_flatten=_make_flatten_context(context)
     )
 
     details = context.get('__details__')
@@ -64,7 +69,7 @@ def make_alert_message(workflow_execution, context, message):
     return msg
 
 
-def alert(workflow_execution, context, message, level='error', from_email, to_emails):
+def alert(workflow_execution, context, message, from_email, to_emails, smtp_server):
     body = make_alert_message(workflow_execution, context, message)
 
     # Open a plain text file for reading.  For this example, assume that
@@ -77,5 +82,5 @@ def alert(workflow_execution, context, message, level='error', from_email, to_em
     msg['To'] = to_emails
 
     s = smtplib.SMTP(smtp_server)
-    s.sendmail(me, [you], msg.as_string())
+    s.sendmail(from_email, to_emails, msg.as_string())
     s.quit()

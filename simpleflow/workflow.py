@@ -1,8 +1,8 @@
 from __future__ import absolute_import
 from .activity import Activity
+from .alerting import alert
 from . import canvas
 from . import task
-from . import alert
 
 import inspect
 
@@ -99,11 +99,10 @@ class Workflow(object):
         raise NotImplementedError
 
     def alert_on_failure(self, workflow_execution, reason):
-        if hasattr(self, 'ALERTING'):
-            alert(
-                workflow_execution,
-                context=self.get(self.ALERTING["context"], {}),
-                reason,
-                self.ALERTING["from_email"],
-                self.ALERTING["to_emails"],
-                stmp_server=self.ALERTING.get('localhost'))
+        if hasattr(self, 'alerting'):
+            context = self.alerting.get("context", {})
+            from_email = self.alerting["from"]
+            to_emails = self.alerting["to"]
+            smtp_server = self.alerting.get("smtp_server", "localhost")
+            alert(workflow_execution, context, reason, from_email, to_emails,
+                  smtp_server)

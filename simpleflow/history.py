@@ -64,7 +64,7 @@ class History(object):
         elif event.state == 'started':
             activity = get_activity(event)
             activity['state'] = event.state
-            activity['identity'] = event.identity
+            activity['identity'] = getattr(event, 'identity', None)
             activity['started_id'] = event.id
             activity['started_timestamp'] = event.timestamp
         elif event.state == 'completed':
