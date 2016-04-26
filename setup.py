@@ -69,14 +69,15 @@ def read(fname):
         content = fp.read()
     return content
 
-DEPS = [
+install_requires = [
     'boto>=2.38.0',
     'tabulate==0.7.3',
     'setproctitle',
-    'subprocess32',
     'click',
     'psutil',
 ]
+if sys.version_info[0] == 2:
+    install_requires.append('subprocess32')
 
 setup(
     name='simpleflow',
@@ -94,7 +95,7 @@ setup(
         'swf': 'swf',
     },
     include_package_data=True,
-    install_requires=DEPS,
+    install_requires=install_requires,
     license=read("LICENSE"),
     zip_safe=False,
     keywords='simpleflow amazon swf simple workflow',
