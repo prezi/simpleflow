@@ -6,10 +6,13 @@ import psutil
 import signal
 import traceback
 
+import sys
+
 import swf.actors
 import swf.format
 
 import simpleflow
+from simpleflow.swf.constants import TRACEBACK_SIZE
 from simpleflow.swf.process.actor import (
     Supervisor,
     Poller,
@@ -108,10 +111,18 @@ class ActivityWorker(object):
         kwargs = input.get('kwargs', {})
         try:
             result = ActivityTask(activity, *args, **kwargs).execute()
-        except Exception as err:
+        except Exception:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
             logger.exception("process error")
-            tb = traceback.format_exc()
-            return poller.fail(token, task, reason=str(err), details=tb)
+            tb = traceback.format_tb(exc_traceback, limit=TRACEBACK_SIZE)
+            return poller.fail(token, task, reason=repr(exc_value), details=json.dumps(
+                {
+                    'error': exc_type.__name__,
+                    'message': str(exc_value),
+                    'traceback': tb,
+                },
+                default=lambda v: repr(v)
+            ))
 
         try:
             poller._complete(token, json.dumps(result))
