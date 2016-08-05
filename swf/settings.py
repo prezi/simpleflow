@@ -5,11 +5,14 @@
 #
 # See the file LICENSE for copying permission.
 
+import logging
 import os
 try:
     from ConfigParser import ConfigParser
 except ImportError:
     from configparser import ConfigParser
+
+logger = logging.getLogger(__name__)
 
 
 def from_stream(stream):
@@ -68,9 +71,12 @@ def from_stream(stream):
             'aws_secret_access_key': config.get('credentials',
                                                 'aws_secret_access_key')
         })
+        logger.debug("getting AWS_ACCESS_KEY_ID from stream: {}".format(
+            settings['aws_access_key_id']))
 
     if config.has_section('defaults'):
         settings['region'] = config.get('defaults', 'region')
+        logger.debug("getting region from stream: {}".format(settings['region']))
 
     return settings
 
@@ -110,9 +116,13 @@ def from_env():
     if "AWS_ACCESS_KEY_ID" in os.environ:
         hsh["aws_access_key_id"] = os.environ["AWS_ACCESS_KEY_ID"]
         hsh["aws_secret_access_key"] = os.environ.get("AWS_SECRET_ACCESS_KEY")
+        logger.debug("getting AWS_ACCESS_KEY_ID from env: {}".format(
+            hsh["aws_access_key_id"]))
 
     if "AWS_DEFAULT_REGION" in os.environ:
         hsh["region"] = os.environ["AWS_DEFAULT_REGION"]
+        logger.debug("getting AWS_DEFAULT_REGION from env: {}".format(
+            hsh["region"]))
 
     return hsh
 
@@ -127,6 +137,7 @@ def from_home(path='.swf'):
     """
     if 'HOME' in os.environ:
         swf_path = os.path.join(os.environ['HOME'], path)
+        logger.debug("loading credentials from home: {}".format(swf_path))
         return from_file(swf_path)
 
     return {}

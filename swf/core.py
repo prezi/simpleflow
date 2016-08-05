@@ -4,6 +4,7 @@
 # Copyright (c) 2013, Greg Leclercq
 #
 # See the file LICENSE for copying permission.
+import logging
 import os
 
 from boto.exception import NoAuthHandlerFound
@@ -16,6 +17,8 @@ from . import settings
 
 SETTINGS = settings.get()
 RETRIES = int(os.environ.get('SWF_CONNECTION_RETRIES', '5'))
+
+logger = logging.getLogger(__name__)
 
 
 class ConnectedSWFObject(object):
@@ -39,6 +42,9 @@ class ConnectedSWFObject(object):
         settings_ = {key: SETTINGS.get(key, kwargs.get(key)) for key in
                      ('aws_access_key_id',
                       'aws_secret_access_key')}
+
+        logger.debug("making a ConnectedSWFObject with aws key={}".format(
+            settings_['aws_access_key_id']))
 
         self.region = (SETTINGS.get('region') or
                        kwargs.get('region') or
