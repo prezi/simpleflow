@@ -160,7 +160,7 @@ class NamedMixin(object):
 
     def set_process_name(self, name=None):
         if name is None:
-            name = self.name
+            name = self._name
 
         setproctitle('{}[{}]'.format(name, self.state))
 
