@@ -67,7 +67,7 @@ class SWFError(Exception):
                       self.kind else None)
 
     def __repr__(self):
-        msg = self.message
+        msg = self.message.strip()
 
         if self.kind and self.details:
             msg += '\nReason: {}, {}'.format(self.kind, self.details)
@@ -373,9 +373,6 @@ def catch(exceptions, handle_with=None, log=False):
         exceptions = tuple(exceptions)
 
     return wrap
-
-
-when = catch
 
 
 is_not = partial(catch, handle_with=always(False))

@@ -13,14 +13,17 @@ from uuid import uuid4
 import boto.connection
 import click
 
+import swf.exceptions
 import swf.models
 import swf.querysets
 
+from simpleflow.history import History
 from simpleflow.swf.stats import pretty
 from simpleflow.swf import helpers
 from simpleflow.swf.process import decider
 from simpleflow.swf.process import worker
 from simpleflow.swf.utils import get_workflow_history
+from simpleflow.utils import json_dumps
 from simpleflow import __version__
 
 
@@ -49,6 +52,13 @@ def disable_boto_connection_pooling():
     # Google App Engine, where it disables connection pooling. There's no
     # "direct" setting, so that's a hack but that works.
     boto.connection.ON_APP_ENGINE = True
+
+
+def comma_separated_list(value):
+    """
+    Transforms a comma-separated list into a list of strigns.
+    """
+    return value.split(",")
 
 
 @click.group()
@@ -107,6 +117,7 @@ def transform_input(wf_input):
               required=False, type=click.File(),
               help='JSON file with the input of the workflow.')
 @click.option('--tags',
+              type=comma_separated_list,
               required=False,
               help='Tags for the workflow execution.')
 @click.option('--decision-tasks-timeout',
@@ -376,6 +387,10 @@ def get_task_list(workflow_id=''):
               type=int,
               required=False,
               help='Number of parallel processes handling activity tasks.')
+@click.option('--nb-deciders',
+              type=int,
+              required=False,
+              help='Number of parallel processes handling decision tasks.')
 @click.option('--input', '-i',
               required=False,
               help='JSON input of the workflow.')
@@ -383,6 +398,7 @@ def get_task_list(workflow_id=''):
               required=False, type=click.File(),
               help='JSON file with the input of the workflow.')
 @click.option('--tags',
+              type=comma_separated_list,
               required=False,
               help='Tags identifying the workflow execution.')
 @click.option('--decision-tasks-timeout',
@@ -423,6 +439,7 @@ def standalone(context,
                input,
                input_file,
                nb_workers,
+               nb_deciders,
                heartbeat,
                display_status,
                repair,
@@ -443,8 +460,10 @@ def standalone(context,
     if not workflow_id:
         workflow_id = get_workflow(workflow).name
 
+    wf_input = None
     if input or input_file:
         wf_input = get_or_load_input(input_file, input)
+
     if repair:
         # get the previous execution history, it will serve as "default history"
         # for activities that succeeded in the previous execution
@@ -470,6 +489,7 @@ def standalone(context,
             task_list,
         ),
         kwargs={
+            'nb_processes': nb_deciders,
             'repair_with': previous_history,
             'force_activities': force_activities,
         },
@@ -482,9 +502,11 @@ def standalone(context,
             workflow,
             domain,
             task_list,
-            nb_workers,
-            heartbeat,
-        )
+        ),
+        kwargs={
+            'nb_processes': nb_workers,
+            'heartbeat': heartbeat,
+        },
     )
     worker_proc.start()
 
@@ -518,3 +540,65 @@ def standalone(context,
     worker_proc.join()
     os.kill(decider_proc.pid, signal.SIGTERM)
     decider_proc.join()
+
+
+@click.option('--domain',
+              envvar='SWF_DOMAIN',
+              required=False,
+              help='Amazon SWF Domain.')
+@click.option('--workflow-id',
+              required=True,
+              help='ID of the workflow execution.')
+@click.option('--input', '-i',
+              required=False,
+              help='JSON input of the workflow.')
+@click.option('--run-id',
+              required=False,
+              help='Run ID of the workflow execution.')
+@click.option('--scheduled-id',
+              required=False,
+              type=int,
+              help='Event ID when the activity has been scheduled.')
+@click.option('--activity-id',
+              required=False,
+              help='Activity ID of the activity you want to replay.')
+@cli.command('activity.rerun', help='Rerun an activity task locally.')
+def activity_rerun(domain,
+                   workflow_id,
+                   run_id,
+                   input,
+                   scheduled_id,
+                   activity_id):
+    # handle params
+    if not activity_id and not scheduled_id:
+        logger.error("Please supply --scheduled-id or --activity-id.")
+        sys.exit(1)
+
+    input_override = None
+    if input:
+        input_override = json.loads(input)
+
+    # find workflow execution
+    try:
+        wfe = helpers.get_workflow_execution(domain, workflow_id, run_id)
+    except (swf.exceptions.DoesNotExistError, IndexError):
+        logger.error("Couldn't find execution, exiting.")
+        sys.exit(1)
+    logger.info("Found execution: workflowId={} runId={}".format(wfe.workflow_id, wfe.run_id))
+
+    # now rerun the specified activity
+    history = History(wfe.history())
+    history.parse()
+    func, args, kwargs, params = helpers.find_activity(
+        history, scheduled_id=scheduled_id, activity_id=activity_id, input=input_override,
+    )
+    logger.debug("Found activity. Last execution:")
+    for line in json_dumps(params, pretty=True).split("\n"):
+        logger.debug(line)
+    if input_override:
+        logger.info("NB: input will be overriden with the passed one!")
+    logger.info("Will re-run: {}(*{}, **{})".format(func.__name__, args, kwargs))
+
+    # finally replay the function with the correct arguments
+    result = func(*args, **kwargs)
+    logger.info("Result (JSON): {}".format(json_dumps(result)))
