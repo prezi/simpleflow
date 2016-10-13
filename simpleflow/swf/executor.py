@@ -453,6 +453,11 @@ class Executor(executor.Executor):
         args = input.get('args', ())
         kwargs = input.get('kwargs', {})
 
+        if hasattr(workflow_started_event, 'tag_list'):
+            self._workflow.tag_list = workflow_started_event.tag_list
+        else:
+            self._workflow.tag_list = None
+
         self.before_replay()
         try:
             result = self.run_workflow(*args, **kwargs)
