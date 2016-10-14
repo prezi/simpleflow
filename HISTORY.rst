@@ -1,6 +1,19 @@
 Changelog
 ---------
 
+0.11.15
+~~~~~~~
+
+- Fix tag_list declaration in case no tag is associated with the workflow
+- Fix listing workflow tasks not handling "scheduled" (not started) tasks correctly
+- Fix CSV formatter outputing an extra "None" at the end of the output
+- Fix 'simpleflow activity.rerun' resolving the bad function name if not the last event
+
+0.11.14
+~~~~~~~
+
+- Various little fixes around process management, heartbeat, logging (#110)
+
 0.11.13
 ~~~~~~~
 

@@ -1,15 +1,15 @@
 from __future__ import absolute_import
 
 import getpass
-from importlib import import_module
-import json
 import os
 import socket
+from importlib import import_module
 
+import swf.exceptions
 import swf.models
 import swf.querysets
-import swf.exceptions
 from simpleflow.activity import Activity
+from simpleflow.utils import json_dumps
 
 from .stats import pretty
 
@@ -109,7 +109,7 @@ def find_activity(history, scheduled_id=None, activity_id=None, input=None):
         raise ValueError("Couldn't find activity.")
 
     # get the callable
-    module_name, method_name = params["name"].rsplit('.', 1)
+    module_name, method_name = found_activity["name"].rsplit('.', 1)
     module = import_module(module_name)
     func = getattr(module, method_name)
     if isinstance(func, Activity):
@@ -135,7 +135,7 @@ def get_task(domain_name, workflow_id, task_id, details):
 
 
 def swf_identity():
-    return json.dumps({
+    return json_dumps({
         'user': getpass.getuser(),          # system's user
         'hostname': socket.gethostname(),   # main hostname
         'pid': os.getpid(),                 # current pid

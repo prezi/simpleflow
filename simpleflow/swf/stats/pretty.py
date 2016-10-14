@@ -1,13 +1,12 @@
-import sys
 import operator
-from functools import partial, wraps
 from datetime import datetime
+from functools import partial, wraps
 
+from simpleflow.history import History
+from simpleflow.utils import json_dumps
 from tabulate import tabulate
 
 from . import WorkflowStats
-from simpleflow.history import History
-from simpleflow.utils import json_dumps
 
 TEMPLATE = '''
 Workflow Execution {workflow_id}
@@ -45,8 +44,12 @@ def tabular(values, headers, tablefmt, floatfmt):
 
 def csv(values, headers, delimiter=','):
     import csv
+    from cStringIO import StringIO
 
-    return csv.writer(sys.stdout, delimiter=delimiter).writerows(values)
+    data = StringIO()
+    csv.writer(data, delimiter=delimiter).writerows(values)
+
+    return data.getvalue()
 
 
 def human(values, headers):

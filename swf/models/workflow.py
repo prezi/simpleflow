@@ -10,6 +10,7 @@ import json
 import collections
 
 from boto.swf.exceptions import SWFResponseError, SWFTypeAlreadyExistsError
+from simpleflow.utils import json_dumps
 
 from swf.constants import REGISTERED
 from swf.utils import immutable
@@ -246,7 +247,7 @@ class WorkflowType(BaseModel):
         :type   input: dict
 
         :param  tag_list: Tags associated with the workflow execution
-        :type   tag_list: String or list of strings
+        :type   tag_list: String or list of strings or None
 
         :param  decision_tasks_timeout: maximum duration of decision tasks
                                         for this workflow execution
@@ -255,11 +256,12 @@ class WorkflowType(BaseModel):
         workflow_id = workflow_id or '%s-%s-%i' % (self.name, self.version, time.time())
         task_list = task_list or self.task_list
         child_policy = child_policy or self.child_policy
-        input = json.dumps(input) or None
-        tag_list = tag_list if isinstance(tag_list, list) else [tag_list]
+        input = json_dumps(input) or None
+        if tag_list is not None and not isinstance(tag_list, list):
+            tag_list = [tag_list]
 
         # checks
-        if len(tag_list) > 5:
+        if tag_list and len(tag_list) > 5:
             raise ValueError("You cannot have more than 5 tags in StartWorkflowExecution.")
 
         run_id = self.connection.start_workflow_execution(
@@ -506,7 +508,7 @@ class WorkflowExecution(BaseModel):
             self.domain.name,
             signal_name,
             self.workflow_id,
-            input=json.dumps(input),
+            input=json_dumps(input),
             run_id=self.run_id)
 
     @exceptions.translate(SWFResponseError,

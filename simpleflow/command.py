@@ -41,7 +41,8 @@ def disable_boto_connection_pooling():
     # boto connection pooling doesn't work very well with multiprocessing, it
     # provokes some errors like this:
     #
-    #    [Errno 1] _ssl.c:1429: error:1408F119:SSL routines:SSL3_GET_RECORD:decryption failed or bad record mac when polling on analysis-testjbb-repair-a61ff96e854344748e308fefc9ddff61
+    #    [Errno 1] _ssl.c:1429: error:1408F119:SSL routines:SSL3_GET_RECORD:decryption failed or bad record mac
+    # when polling on analysis-testjbb-repair-a61ff96e854344748e308fefc9ddff61
     #
     # It's because when forking, file handles are copied and sockets are shared.
     # Even sockets that handle SSL conections to AWS services, but SSL
@@ -387,6 +388,10 @@ def get_task_list(workflow_id=''):
               type=int,
               required=False,
               help='Number of parallel processes handling activity tasks.')
+@click.option('--nb-deciders',
+              type=int,
+              required=False,
+              help='Number of parallel processes handling decision tasks.')
 @click.option('--input', '-i',
               required=False,
               help='JSON input of the workflow.')
@@ -435,6 +440,7 @@ def standalone(context,
                input,
                input_file,
                nb_workers,
+               nb_deciders,
                heartbeat,
                display_status,
                repair,
@@ -455,8 +461,10 @@ def standalone(context,
     if not workflow_id:
         workflow_id = get_workflow(workflow).name
 
+    wf_input = None
     if input or input_file:
         wf_input = get_or_load_input(input_file, input)
+
     if repair:
         repair_run_id = None
         if " " in repair:
@@ -485,6 +493,7 @@ def standalone(context,
             task_list,
         ),
         kwargs={
+            'nb_processes': nb_deciders,
             'repair_with': previous_history,
             'force_activities': force_activities,
         },
@@ -497,9 +506,11 @@ def standalone(context,
             workflow,
             domain,
             task_list,
-            nb_workers,
-            heartbeat,
-        )
+        ),
+        kwargs={
+            'nb_processes': nb_workers,
+            'heartbeat': heartbeat,
+        },
     )
     worker_proc.start()
 
@@ -512,7 +523,7 @@ def standalone(context,
         execution_timeout,
         tags,
         decision_tasks_timeout,
-        json.dumps(wf_input),
+        json_dumps(wf_input),
         None,
         local=False,
     )
@@ -594,4 +605,4 @@ def activity_rerun(domain,
 
     # finally replay the function with the correct arguments
     result = func(*args, **kwargs)
-    logger.info("Result (JSON): {}".format(json_dumps(result)))
+    logger.info("Result (JSON): {}".format(json_dumps(result, compact=False)))
