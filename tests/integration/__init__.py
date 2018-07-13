@@ -1,11 +1,20 @@
 import inspect
 import os
-import unittest
 
 import boto.swf
+from click.testing import CliRunner
+from sure import expect
 from vcr import VCR
 
-import simpleflow.command
+import simpleflow.command  # NOQA
+from tests.utils import IntegrationTestCase
+
+from simpleflow.utils import json_dumps
+
+if False:
+    from typing import List, Union
+    from click.testing import Result
+
 
 # Default SWF parameters
 os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
@@ -24,6 +33,7 @@ vcr = VCR(
     filter_headers=[
         ("Authorization", "AWS4-HMAC-SHA256 Credential=1234AB/20160823/us-east-1/swf/aws4_request,SignedHeaders=host;x-amz-date;x-amz-target,Signature=foobar"),  # noqa
     ],
+    record_mode=os.getenv("SIMPLEFLOW_VCR_RECORD_MODE", "once"),
 )
 
 
@@ -31,7 +41,7 @@ vcr = VCR(
 WORKFLOW_ID = "test-simpleflow-workflow"
 
 
-class IntegrationTest(unittest.TestCase):
+class VCRIntegrationTest(IntegrationTestCase):
     @property
     def region(self):
         return os.environ["AWS_DEFAULT_REGION"]
@@ -49,3 +59,57 @@ class IntegrationTest(unittest.TestCase):
         if not hasattr(self, "_conn"):
             self._conn = boto.swf.connect_to_region(self.region)
         return self._conn
+
+    def get_events(self, run_id):
+        response = self.conn.get_workflow_execution_history(
+            self.domain,
+            run_id,
+            self.workflow_id,
+        )
+        events = response['events']
+        next_page = response.get('nextPageToken')
+        while next_page is not None:
+            response = self.conn.get_workflow_execution_history(
+                self.domain,
+                run_id,
+                self.workflow_id,
+                next_page_token=next_page,
+            )
+
+            events.extend(response['events'])
+            next_page = response.get('nextPageToken')
+        return events
+
+    def invoke(self, command, arguments):
+        # type: (str, Union(str, List[str])) -> Result
+        if not hasattr(self, "runner"):
+            self.runner = CliRunner()
+        if isinstance(arguments, str):
+            arguments = arguments.split(" ")
+        print('simpleflow {} {}'.format(command, ' '.join(arguments)))
+        return self.runner.invoke(command, arguments, catch_exceptions=False)
+
+    def run_standalone(self, workflow_name, *args, **kwargs):
+        input = json_dumps(dict(args=args, kwargs=kwargs))
+        result = self.invoke(
+            simpleflow.command.cli,
+            [
+                "standalone",
+                "--workflow-id",
+                str(self.workflow_id),
+                "--input",
+                input,
+                "--nb-deciders",
+                "2",
+                "--nb-workers",
+                "2",
+                workflow_name,
+            ],
+        )
+        expect(result.exit_code).to.equal(0)
+        lines = result.output.split("\n")
+        start_line = [line for line in lines if line.startswith(self.workflow_id)][0]
+        _, run_id = start_line.split(" ", 1)
+
+        events = self.get_events(run_id)
+        return events

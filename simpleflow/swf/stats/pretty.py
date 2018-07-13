@@ -1,7 +1,11 @@
 import operator
 from datetime import datetime
 from functools import partial, wraps
+from itertools import chain
 
+from future.utils import iteritems
+
+from simpleflow import compat
 from simpleflow.history import History
 from simpleflow.utils import json_dumps
 from tabulate import tabulate
@@ -44,9 +48,10 @@ def tabular(values, headers, tablefmt, floatfmt):
 
 def csv(values, headers, delimiter=','):
     import csv
-    from cStringIO import StringIO
+    from io import BytesIO
 
-    data = StringIO()
+    data = BytesIO()
+
     csv.writer(data, delimiter=delimiter).writerows(values)
 
     return data.getvalue()
@@ -90,16 +95,16 @@ def info(workflow_execution):
     history = History(workflow_execution.history())
     history.parse()
 
-    if history._tasks:
-        first_event = history._tasks[0]
+    if history.tasks:
+        first_event = history.tasks[0]
         first_timestamp = first_event[first_event['state'] + '_timestamp']
-        last_event = history._tasks[-1]
-        last_timestamp = last_event[last_event['state'] + '_timestamp']
+        last_event = history.tasks[-1]
+        last_timestamp = last_event.get('timestamp') or last_event[last_event['state'] + '_timestamp']
         workflow_input = first_event['input']
     else:
         first_event = history.events[0]
         first_timestamp = first_event.timestamp
-        last_event = history.events[0]
+        last_event = history.events[-1]
         last_timestamp = last_event.timestamp
         workflow_input = first_event.input
 
@@ -175,7 +180,7 @@ def status(workflow_execution, nb_tasks=None):
     header = 'Tasks', 'Last State', 'Last State Time', 'Scheduled Time'
     rows = [
         (task['name'],) + get_timestamps(task) for task in
-        history._tasks[::-1]
+        history.tasks[::-1]
         ]
     if nb_tasks:
         rows = rows[:nb_tasks]
@@ -196,13 +201,13 @@ def formatted(with_info=False, with_header=False, fmt=DEFAULT_FORMAT):
         wrapped.__wrapped__ = wrapped
         return wrapped
 
-    if isinstance(fmt, basestring):
+    if isinstance(fmt, compat.basestring):
         fmt = FORMATS[fmt]
 
     return formatter
 
 
-def list(workflow_executions):
+def list_executions(workflow_executions):
     header = 'Workflow ID', 'Workflow Type', 'Status'
     rows = ((
                 execution.workflow_id,
@@ -240,7 +245,7 @@ def list_details(workflow_executions):
 def get_task(workflow_execution, task_id, details=False):
     history = History(workflow_execution.history())
     history.parse()
-    task = history._activities[task_id]
+    task = history.activities[task_id]
     header = ['type', 'id', 'name', 'version', 'state', 'timestamp', 'input', 'result', 'reason']
     # TODO...
     if details:
@@ -263,3 +268,12 @@ def get_task(workflow_execution, task_id, details=False):
     if details:
         rows[0].append(task.get('details'))
     return header, rows
+
+
+def dump_history_to_json(history):
+    history.parse()
+    events = list(chain(
+        iteritems(history.activities),
+        iteritems(history.child_workflows),
+    ))
+    return jsonify(events, headers=None)

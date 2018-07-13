@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 from simpleflow import activity
 from .constants import DEFAULT_VERSION
 
@@ -31,6 +33,11 @@ def increment_retry(x):
     return x + 1
 
 
+@activity.with_attributes(version=DEFAULT_VERSION)
+def print_message(msg):
+    print("MESSAGE: {}".format(msg))
+
+
 @activity.with_attributes(version=DEFAULT_VERSION, raises_on_failure=True)
 def raise_on_failure():
     raise Exception('error')
@@ -39,3 +46,8 @@ def raise_on_failure():
 @activity.with_attributes(version=DEFAULT_VERSION)
 def raise_error():
     raise Exception('error')
+
+
+@activity.with_attributes(version=DEFAULT_VERSION)
+def non_pythonic(*args, **kwargs):
+    pass

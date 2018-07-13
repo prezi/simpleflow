@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-
-from . import exceptions
+from simpleflow._decorators import deprecated
+from simpleflow import exceptions
 
 
 __all__ = ['Future', 'get_result_or_raise', 'wait']
@@ -34,11 +34,11 @@ _STATE_TO_DESCRIPTION_MAP = {
 }
 
 
+@deprecated
 def get_result_or_raise(future):
     """Returns the ``result`` of *future* if it is available, otherwise
-    raise."""
-    if future.state == PENDING:
-        raise exceptions.ExecutionBlocked()
+    raise.
+    """
     return future.result
 
 
@@ -67,9 +67,11 @@ class Future(object):
         self._exception = None
 
     def __repr__(self):
-        return '<Future at %s state=%s>' % (
+        return '<Future at %s state=%s%s>' % (
             hex(id(self)),
-            _STATE_TO_DESCRIPTION_MAP[self._state])
+            _STATE_TO_DESCRIPTION_MAP[self._state],
+            ' exception=%r' % self._exception if self._exception else ''
+        )
 
     def wait(self):
         raise exceptions.ExecutionBlocked
@@ -77,11 +79,10 @@ class Future(object):
     @property
     def result(self):
         """Raise a cls::`exceptions.ExecutionBlocked` when the result is not
-        available."""
-        if self._state != FINISHED:
-            return self.wait()
-
-        return self._result
+        available and the future was not cancelled."""
+        if self.done:
+            return self._result
+        return self.wait()
 
     def cancel(self):
         """Cancel a future.
@@ -128,8 +129,33 @@ class Future(object):
         return self._state == FINISHED
 
     @property
+    def pending(self):
+        return self._state == PENDING
+
+    @property
     def done(self):
         return self._state in [
             CANCELLED,
             FINISHED
         ]
+
+    # Internal methods
+    def set_running(self):
+        self._state = RUNNING
+
+    def set_exception(self, exception):
+        """
+        Set state to finished with an exception.
+        :param exception:
+        :type exception: Optional[Exception]
+        :return:
+        """
+        self._state = FINISHED
+        self._exception = exception
+
+    def set_finished(self, result):
+        self._state = FINISHED
+        self._result = result
+
+    def set_cancelled(self):
+        self._state = CANCELLED

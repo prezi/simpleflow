@@ -1,5 +1,7 @@
 import sys
 
+from future.utils import iteritems
+
 from . import default
 
 
@@ -22,12 +24,11 @@ def get_settings(module):
 
 def load_settings(module, env, conf, defaults):
     settings = {}
-    value = None
-    for name, typ in get_settings(module).iteritems():
+    for name, typ in iteritems(get_settings(module)):
         if name in env:
             value = env[name]
-        elif name in conf:
-            value = conf[name]
+        elif conf and hasattr(conf, name):
+            value = getattr(conf, name)
         else:
             value = getattr(defaults, name)
 
@@ -44,7 +45,7 @@ def load(conf_module_name=None):
     if conf_module_name:
         conf = __import__(conf_module_name, fromlist=['*'])
     else:
-        conf = {}
+        conf = None
 
     return load_settings(
         sys.modules[__name__],
@@ -52,6 +53,9 @@ def load(conf_module_name=None):
         conf,
         default,
     )
+
+def str_or_none(val):
+    return val or None
 
 
 WORKFLOW_DEFAULT_TASK_LIST = str
@@ -68,3 +72,13 @@ ACTIVITY_SCHEDULE_TO_START_TIMEOUT = str
 ACTIVITY_HEARTBEAT_TIMEOUT = str
 
 LOGGING = dict
+
+SIMPLEFLOW_S3_HOST = str
+
+STEP_BUCKET = str
+
+METROLOGY_BUCKET = str
+METROLOGY_PATH_PREFIX = str_or_none
+
+SIMPLEFLOW_ENABLE_DISK_CACHE = bool
+SIMPLEFLOW_BINARIES_DIRECTORY = str

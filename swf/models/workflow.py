@@ -5,32 +5,28 @@
 #
 # See the file LICENSE for copying permission.
 
-import time
-import json
 import collections
+import time
 
 from boto.swf.exceptions import SWFResponseError, SWFTypeAlreadyExistsError
-from simpleflow.utils import json_dumps
-
-from swf.constants import REGISTERED
-from swf.utils import immutable
-from swf.models import BaseModel, Domain
-from swf.models.history import History
-from swf.models.base import ModelDiff
+from simpleflow import compat, format
 from swf import exceptions
+from swf.constants import REGISTERED
 from swf.exceptions import (
     DoesNotExistError,
     AlreadyExistsError,
     ResponseError,
     raises,
 )
-
+from swf.models import BaseModel, Domain
+from swf.models.base import ModelDiff
+from swf.models.history import History
+from swf.utils import immutable
 
 _POLICIES = (
-    'TERMINATE',       # child executions will be terminated
-    'REQUEST_CANCEL',  # a request to cancel will be attempted for
-                       # each child execution
-    'ABANDON',         # no action will be taken
+    'TERMINATE',  # child executions will be terminated
+    'REQUEST_CANCEL',  # a request to cancel will be attempted for each child execution
+    'ABANDON',  # no action will be taken
 )
 
 CHILD_POLICIES = collections.namedtuple('CHILD_POLICY',
@@ -53,23 +49,23 @@ class WorkflowType(BaseModel):
     :type   domain: swf.models.Domain
 
     :param  name: name of the workflow type
-    :type   name: String
+    :type   name: str
 
     :param  version: workflow type version
-    :type   version: String
+    :type   version: str
 
     :param  status: workflow type status
     :type   status: swf.core.ConnectedSWFObject.{REGISTERED, DEPRECATED}
 
-    :param   creation_date: creation date of the current WorkflowType
-    :type    creation_date: float (timestamp)
+    :param   creation_date: creation date of the current WorkflowType (timestamp)
+    :type    creation_date: float
 
-    :param   deprecation_date: deprecation date of WorkflowType
-    :type    deprecation_date: float (timestamp)
+    :param   deprecation_date: deprecation date of WorkflowType (timestamp)
+    :type    deprecation_date: float
 
     :param  task_list: task list to use for scheduling decision tasks for executions
                        of this workflow type
-    :type   task_list: String
+    :type   task_list: str
 
     :param  child_policy: policy to use for the child workflow executions
                           when a workflow execution of this type is terminated
@@ -78,13 +74,13 @@ class WorkflowType(BaseModel):
                                           ABANDON}
 
     :param  execution_timeout: maximum duration for executions of this workflow type
-    :type   execution_timeout: String
+    :type   execution_timeout: str
 
     :param  decision_tasks_timeout: maximum duration of decision tasks for this workflow type
-    :type   decision_tasks_timeout: String
+    :type   decision_tasks_timeout: str
 
     :param  description: Textual description of the workflow type
-    :type   description: String
+    :type   description: str
     """
     __slots__ = [
         'domain',
@@ -130,7 +126,7 @@ class WorkflowType(BaseModel):
         super(self.__class__, self).__init__(*args, **kwargs)
 
     def set_child_policy(self, policy):
-        if not policy in CHILD_POLICIES:
+        if policy not in CHILD_POLICIES:
             raise ValueError("invalid child policy value: {}".format(policy))
 
         self.child_policy = policy
@@ -139,9 +135,9 @@ class WorkflowType(BaseModel):
         """Checks for differences between WorkflowType instance
         and upstream version
 
-        :returns: A list of swf.models.base.ModelDiff namedtuple describing
+        :returns: A swf.models.base.ModelDiff describing
                   differences
-        :rtype: list
+        :rtype: ModelDiff
         """
         try:
             description = self.connection.describe_workflow_type(
@@ -256,7 +252,10 @@ class WorkflowType(BaseModel):
         workflow_id = workflow_id or '%s-%s-%i' % (self.name, self.version, time.time())
         task_list = task_list or self.task_list
         child_policy = child_policy or self.child_policy
-        input = json_dumps(input) or None
+        if child_policy not in CHILD_POLICIES:
+            raise ValueError("invalid child policy value: {}".format(child_policy))
+        if input is None:
+            input = {}
         if tag_list is not None and not isinstance(tag_list, list):
             tag_list = [tag_list]
 
@@ -272,7 +271,7 @@ class WorkflowType(BaseModel):
             task_list=task_list,
             child_policy=child_policy,
             execution_start_to_close_timeout=execution_timeout,
-            input=input,
+            input=format.input(input),
             tag_list=tag_list,
             task_start_to_close_timeout=decision_tasks_timeout,
         )['runId']
@@ -281,11 +280,11 @@ class WorkflowType(BaseModel):
 
     def __repr__(self):
         return '<{} domain={} name={} version={} status={}>'.format(
-               self.__class__.__name__,
-               self.domain.name,
-               self.name,
-               self.version,
-               self.status)
+            self.__class__.__name__,
+            self.domain.name,
+            self.name,
+            self.version,
+            self.status)
 
 
 @immutable
@@ -383,8 +382,8 @@ class WorkflowExecution(BaseModel):
         self.cancel_requested = cancel_requested
         self.latest_execution_context = latest_execution_context
         self.latest_activity_task_timestamp = latest_activity_task_timestamp
-        self.open_counts = open_counts or {} # so we can query keys in any case
-        self.parent = parent or {} # so we can query keys in any case
+        self.open_counts = open_counts or {}  # so we can query keys in any case
+        self.parent = parent or {}  # so we can query keys in any case
 
         # immutable decorator rebinds class name,
         # so have to use generice self.__class__
@@ -394,9 +393,9 @@ class WorkflowExecution(BaseModel):
         """Checks for differences between WorkflowExecution instance
         and upstream version
 
-        :returns: A list of swf.models.base.Diff namedtuple describing
+        :returns: A swf.models.base.ModelDiff describing
                   differences
-        :rtype: list
+        :rtype: ModelDiff
         """
         try:
             description = self.connection.describe_workflow_execution(
@@ -455,11 +454,11 @@ class WorkflowExecution(BaseModel):
         :rtype: swf.models.event.History
         """
         domain = kwargs.pop('domain', self.domain)
-        if not isinstance(domain, basestring):
+        if not isinstance(domain, compat.basestring):
             domain = domain.name
 
         response = self.connection.get_workflow_execution_history(
-            self.domain.name,
+            domain,
             self.run_id,
             self.workflow_id,
             **kwargs
@@ -469,7 +468,7 @@ class WorkflowExecution(BaseModel):
         next_page = response.get('nextPageToken')
         while next_page is not None:
             response = self.connection.get_workflow_execution_history(
-                self.domain.name,
+                domain,
                 self.run_id,
                 self.workflow_id,
                 next_page_token=next_page,
@@ -487,12 +486,14 @@ class WorkflowExecution(BaseModel):
                       raises(WorkflowExecutionDoesNotExist,
                              when=exceptions.is_unknown('WorkflowExecution'),
                              extract=exceptions.extract_resource))
-    def signal(self, signal_name, input=None, *args, **kwargs):
+    def signal(self, signal_name, input=None, workflow_id=None, run_id=None, *args, **kwargs):
         """Records a signal event in the workflow execution history and
         creates a decision task.
 
         The signal event is recorded with the specified user defined
         ``signal_name`` and ``input`` (if provided).
+
+        Default to send to oneself (for compatibility with the previous versions).
 
         :param  signal_name: The name of the signal. This name must be
                              meaningful to the target workflow.
@@ -501,15 +502,20 @@ class WorkflowExecution(BaseModel):
         :param  input: Data to attach to the WorkflowExecutionSignaled
                        event in the target workflow execution’s history.
         :type   input: dict
+        :param  workflow_id: Workflow ID to send the signal to.
+        :type  workflow_id: str
+        :param  run_id: Run ID to send the signal to.
+        :type  run_id: str
         """
         if input is None:
             input = {}
         self.connection.signal_workflow_execution(
             self.domain.name,
             signal_name,
-            self.workflow_id,
-            input=json_dumps(input),
-            run_id=self.run_id)
+            workflow_id or self.workflow_id,
+            input=format.input(input),
+            run_id=run_id if workflow_id else self.run_id,
+        )
 
     @exceptions.translate(SWFResponseError,
                           to=ResponseError)
@@ -530,10 +536,13 @@ class WorkflowExecution(BaseModel):
                       raises(WorkflowExecutionDoesNotExist,
                              when=exceptions.is_unknown('domain'),
                              extract=exceptions.extract_resource))
-    def terminate(self, *args, **kwargs):
+    def terminate(self, child_policy=None, details=None, reason=None):
         """Terminates the workflow execution"""
         self.connection.terminate_workflow_execution(
             self.domain.name,
             self.workflow_id,
-            run_id=self.run_id
+            run_id=self.run_id,
+            child_policy=child_policy,
+            details=format.details(details),
+            reason=format.reason(reason),
         )

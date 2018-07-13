@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 
+from simpleflow.constants import HOUR, MINUTE
 from swf.models.history import builder
 
 from simpleflow import (
@@ -15,14 +16,12 @@ def increment(x):
     return x + 1
 
 
-class TestWorkflow(Workflow):
+class ATestWorkflow(Workflow):
     name = 'test_workflow'
     version = 'test_version'
     task_list = 'test_task_list'
-    decision_tasks_timeout = '300'
-    execution_timeout = '3600'
-    tag_list = None      # FIXME should be optional
-    child_policy = None  # FIXME should be optional
+    decision_tasks_timeout = 5 * MINUTE
+    execution_timeout = 1 * HOUR
 
     def run(self, **context):
         return 0
@@ -33,10 +32,10 @@ def test_last_state_times():
     This test checks an execution with a single activity tasks.
 
     """
-    history_builder = builder.History(TestWorkflow)
+    history_builder = builder.History(ATestWorkflow)
 
     last_state = 'completed'
-    activity_id = 'activity-tests.test_dataflow.increment-1'
+    activity_id = 'activity-tests.test_simpleflow.test_dataflow.increment-1'
 
     history_builder.add_activity_task(
         increment,

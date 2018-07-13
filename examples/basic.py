@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import time
 
 from simpleflow import (
@@ -9,6 +11,10 @@ from simpleflow import (
 
 @activity.with_attributes(task_list='quickstart', version='example')
 def increment(x):
+    # Here's how you can access the raw context of the activity task if you need
+    # it. It gives you access to the response of the PollForActivityTask call to
+    # the SWF API. See docs for more info: http://docs.aws.amazon.com/amazonswf/latest/apireference/API_PollForActivityTask.html#API_PollForActivityTask_ResponseSyntax  # NOQA
+    print("DEBUG: activity context: {}".format(increment.context))
     return x + 1
 
 
@@ -35,14 +41,17 @@ class BasicWorkflow(Workflow):
     name = 'basic'
     version = 'example'
     task_list = 'example'
+    tag_list = ['a=1', 'b=foo']
 
     def run(self, x, t=30):
+        execution = self.get_run_context()
+        print('DEBUG: execution context: {}'.format(execution))
         y = self.submit(increment, x)
         yy = self.submit(Delay, t, y)
         z = self.submit(double, y)
 
-        print '({x} + 1) * 2 = {result}'.format(
+        print('({x} + 1) * 2 = {result}'.format(
             x=x,
-            result=z.result)
+            result=z.result))
         futures.wait(yy, z)
         return z.result

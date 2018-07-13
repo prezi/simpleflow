@@ -1,10 +1,11 @@
 # -*- coding:utf-8 -*-
 
 import boto.exception
+from simpleflow import format
 from swf.actors import Actor
 from swf.models import ActivityTask
-from swf.exceptions import PollTimeout, ResponseError, DoesNotExistError
-from swf import format
+from swf.exceptions import PollTimeout, ResponseError, DoesNotExistError, RateLimitExceededError
+from swf.responses import Response
 
 
 class ActivityWorker(Actor):
@@ -45,15 +46,19 @@ class ActivityWorker(Actor):
         :type   details: string
         """
         try:
-            return self.connection.respond_activity_task_canceled(task_token, details)
+            return self.connection.respond_activity_task_canceled(
+                task_token,
+                details=format.details(details),
+            )
         except boto.exception.SWFResponseError as e:
+            message = self.get_error_message(e)
             if e.error_code == 'UnknownResourceFault':
                 raise DoesNotExistError(
                     "Unable to cancel activity task with token={}".format(task_token),
-                    e.body['message'],
+                    message,
                 )
 
-            raise ResponseError(e.body['message'])
+            raise ResponseError(message)
 
     def complete(self, task_token, result=None):
         """Responds to ``swf`` that the activity task is completed
@@ -67,16 +72,17 @@ class ActivityWorker(Actor):
         try:
             return self.connection.respond_activity_task_completed(
                 task_token,
-                result
+                format.result(result),
             )
         except boto.exception.SWFResponseError as e:
+            message = self.get_error_message(e)
             if e.error_code == 'UnknownResourceFault':
                 raise DoesNotExistError(
                     "Unable to complete activity task with token={}".format(task_token),
-                    e.body['message'],
+                    message,
                 )
 
-            raise ResponseError(e.body['message'])
+            raise ResponseError(message)
 
     def fail(self, task_token, details=None, reason=None):
         """Replies to ``swf`` that the activity task failed
@@ -84,7 +90,7 @@ class ActivityWorker(Actor):
         :param  task_token: canceled activity task token
         :type   task_token: string
 
-        :param  details: provided details about cancel
+        :param  details: provided details about the failure
         :type   details: string
 
         :param  reason: Description of the error that may assist in diagnostics
@@ -97,36 +103,44 @@ class ActivityWorker(Actor):
                 reason=format.reason(reason),
             )
         except boto.exception.SWFResponseError as e:
+            message = self.get_error_message(e)
             if e.error_code == 'UnknownResourceFault':
                 raise DoesNotExistError(
                     "Unable to fail activity task with token={}".format(task_token),
-                    e.body['message'],
+                    message,
                 )
 
-            raise ResponseError(e.body['message'])
+            raise ResponseError(message)
 
     def heartbeat(self, task_token, details=None):
         """Records activity task heartbeat
 
         :param  task_token: canceled activity task token
-        :type   task_token: string
+        :type   task_token: str
 
-        :param  details: provided details about cancel
+        :param  details: provided details about task progress
         :type   details: string
         """
         try:
             return self.connection.record_activity_task_heartbeat(
                 task_token,
-                details
+                format.heartbeat_details(details),
             )
         except boto.exception.SWFResponseError as e:
+            message = self.get_error_message(e)
             if e.error_code == 'UnknownResourceFault':
                 raise DoesNotExistError(
                     "Unable to send heartbeat with token={}".format(task_token),
-                    e.body['message'],
+                    message,
                 )
 
-            raise ResponseError(e.body['message'])
+            if e.error_code == 'ThrottlingException':
+                raise RateLimitExceededError(
+                    "Rate exceeded when sending heartbeat with token={}".format(task_token),
+                    message,
+                )
+
+            raise ResponseError(message)
 
     def poll(self, task_list=None, identity=None):
         """Polls for an activity task to process from current
@@ -147,8 +161,8 @@ class ActivityWorker(Actor):
 
         :raises: PollTimeout
 
-        :returns: polled activity task
-        :type: swf.models.ActivityTask
+        :returns: task token, polled activity task
+        :rtype: (str, ActivityTask)
         """
         task_list = task_list or self.task_list
         identity = identity or self._identity
@@ -157,16 +171,17 @@ class ActivityWorker(Actor):
             polled_activity_data = self.connection.poll_for_activity_task(
                 self.domain.name,
                 task_list,
-                identity=identity
+                identity=format.identity(identity),
             )
         except boto.exception.SWFResponseError as e:
+            message = self.get_error_message(e)
             if e.error_code == 'UnknownResourceFault':
                 raise DoesNotExistError(
                     "Unable to poll activity task",
-                    e.body['message'],
+                    message,
                 )
 
-            raise ResponseError(e.body['message'])
+            raise ResponseError(message)
 
         if 'taskToken' not in polled_activity_data:
             raise PollTimeout("Activity Worker poll timed out")
@@ -176,6 +191,9 @@ class ActivityWorker(Actor):
             self.task_list,
             polled_activity_data
         )
-        task_token = activity_task.task_token
 
-        return task_token, activity_task
+        return Response(
+            task_token=activity_task.task_token,
+            activity_task=activity_task,
+            raw_response=polled_activity_data,
+        )

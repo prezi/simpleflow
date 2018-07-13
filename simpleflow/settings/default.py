@@ -1,7 +1,7 @@
 import logging  # NOQA
 import os
 
-from .logging_formatter import SimpleflowFormatter
+from simpleflow.log import SimpleflowFormatter
 
 
 WORKFLOW_DEFAULT_TASK_LIST = 'default'
@@ -16,6 +16,13 @@ ACTIVITY_START_TO_CLOSE_TIMEOUT = ACTIVITY_DEFAULT_TIMEOUT
 ACTIVITY_SCHEDULE_TO_CLOSE_TIMEOUT = ACTIVITY_DEFAULT_TIMEOUT
 ACTIVITY_SCHEDULE_TO_START_TIMEOUT = ACTIVITY_DEFAULT_TIMEOUT
 ACTIVITY_HEARTBEAT_TIMEOUT = ACTIVITY_DEFAULT_TIMEOUT
+
+SIMPLEFLOW_S3_HOST = 's3.amazonaws.com'
+
+STEP_BUCKET = 'step_bucket'
+
+METROLOGY_BUCKET = 'metrology_bucket'
+METROLOGY_PATH_PREFIX = None
 
 LOGGING = {
     'version': 1,
@@ -44,3 +51,6 @@ LOGGING = {
         },
     }
 }
+
+SIMPLEFLOW_ENABLE_DISK_CACHE = False
+SIMPLEFLOW_BINARIES_DIRECTORY = '/tmp/simpleflow-binaries'

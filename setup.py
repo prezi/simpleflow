@@ -1,18 +1,20 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import platform
 import re
-import sys
 import subprocess
+import sys
+
 from setuptools import setup, find_packages
 from setuptools.command.test import test as TestCommand
-
+from io import open
 
 REQUIRES = [
 
 ]
-PUBLISH_CMD = "python setup.py register sdist bdist_wheel upload"
-TEST_PUBLISH_CMD = 'python setup.py register -r test sdist bdist_wheel upload -r test'
+PUBLISH_CMD = "python setup.py sdist bdist_wheel upload"
+TEST_PUBLISH_CMD = 'python setup.py sdist bdist_wheel upload -r test'
+
+PY2 = int(sys.version[0]) == 2
 
 
 class PyTest(TestCommand):
@@ -43,8 +45,8 @@ def find_version(fname):
         raise RuntimeError('Cannot find version information')
     return version
 
-__version__ = find_version("simpleflow/__init__.py")
 
+__version__ = find_version("simpleflow/__init__.py")
 
 if 'publish' in sys.argv:
     try:
@@ -66,31 +68,44 @@ if 'publish_test' in sys.argv:
 
 
 def read(fname):
-    with open(fname) as fp:
+    with open(fname, encoding='utf8') as fp:
         content = fp.read()
     return content
 
+
 DEPS = [
+    'future',
     'boto>=2.38.0',
-    'tabulate==0.7.3',
+    'diskcache==2.4.1',
+    'Jinja2>=2.8',
+    'kubernetes==3.0.0',
+    'lazy_object_proxy',
+    'lockfile>=0.9.1',
+    'tabulate>=0.7.3,<0.8.0',
     'setproctitle',
-    'subprocess32',
     'click',
-    'psutil',
+    'psutil>=3.2.1',
     'pytz',
+    'typing',
+    'PyYAML',
 ]
+if PY2:
+    DEPS += [
+        'enum34',
+        'subprocess32',
+    ]
 
 setup(
     name='simpleflow',
     version=__version__,
     description='Python library for dataflow programming with Amazon SWF',
-    long_description=(read("README.rst") + '\n\n' +
-                      read("README_SWF.rst") + '\n\n' +
-                      read("HISTORY.rst")),
+    long_description=(read("README.md") + '\n\n' +
+                      read("CHANGELOG.md")),
+    long_description_content_type='text/markdown',
     author='Greg Leclercq',
-    author_email='greg@botify.com',
+    author_email='tech@botify.com',
     url='https://github.com/botify-labs/simpleflow',
-    packages=find_packages(exclude=("test*", )),
+    packages=find_packages(exclude=("test*",)),
     package_dir={
         'simpleflow': 'simpleflow',
         'swf': 'swf',
@@ -106,15 +121,17 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
         "Programming Language :: Python :: 2",
-        'Programming Language :: Python :: 2.6',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.3',
+        'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
     ],
     test_suite='tests',
     tests_require=[
         'pytest',
-        'moto>=0.4.19',
+        'moto==0.4.31',
     ],
     cmdclass={'test': PyTest},
     entry_points={

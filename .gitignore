@@ -22,7 +22,7 @@ lib64
 pip-log.txt
 
 # Unit test / coverage reports
-.coverage
+.coverage*
 nosetests.xml
 
 # Translations
@@ -33,10 +33,23 @@ nosetests.xml
 .project
 .pydevproject
 
+# Vim swap files
+*.swp
+
 # Complexity
 output/*.html
 output/*/index.html
 
-# Sphinx
-docs/_build
-docs/api/*
+# Mkdocs
+docs/site
+
+# Coverage
+htmlcov/
+
+# Temporary files
+.cache/
+tmp/
+
+
+# Not to be ignored
+!docs/script/build

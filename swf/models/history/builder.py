@@ -1,6 +1,3 @@
-import json
-
-import swf.models
 import swf.models.event.workflow
 from simpleflow.utils import json_dumps
 from swf.models.event.factory import EventFactory
@@ -43,7 +40,7 @@ CHILD_WORKFLOW_STATES = set(
 
 class History(swf.models.History):
     """
-    Help to build a history to simulate the execution of a workflow.
+    Helper class to build a history to simulate the execution of a workflow.
 
     """
     def __init__(self, workflow, input=None, tag_list=None):
@@ -190,14 +187,14 @@ class History(swf.models.History):
                                           activity_type,
                                           cause):
         self.events.append(EventFactory({
-            u'eventId': self.next_id,
-            u'eventTimestamp': 1386947268.527,
-            u'eventType': u'ScheduleActivityTaskFailed',
-            u'scheduleActivityTaskFailedEventAttributes': {
-                u'activityId': activity_id,
-                u'activityType': activity_type.copy(),
-                u'cause': cause,
-                u'decisionTaskCompletedEventId': decision_id,
+            "eventId": self.next_id,
+            "eventTimestamp": 1386947268.527,
+            "eventType": "ScheduleActivityTaskFailed",
+            "scheduleActivityTaskFailedEventAttributes": {
+                "activityId": activity_id,
+                "activityType": activity_type.copy(),
+                "cause": cause,
+                "decisionTaskCompletedEventId": decision_id,
             }
         }))
 
@@ -382,15 +379,13 @@ class History(swf.models.History):
             'eventType': 'StartChildWorkflowExecutionInitiated',
             'eventTimestamp': new_timestamp_string(),
             'startChildWorkflowExecutionInitiatedEventAttributes': {
-                'control': (json_dumps(control) if
-                            control is not None else None),
+                'control': json_dumps(control),
                 'childPolicy': 'TERMINATE',
                 'decisionTaskCompletedEventId': 76,
                 'executionStartToCloseTimeout': '432000',
-                'input': (json_dumps(input) if
-                          input is not None else '{}'),
+                'input': json_dumps(input) if input is not None else '{}',
                 'tagList': tag_list,
-                'taskList': task_list,
+                'taskList': {'name': task_list},
                 'taskStartToCloseTimeout': task_start_to_close_timeout,
                 'workflowId': workflow_id,
                 'workflowType': {
@@ -403,9 +398,7 @@ class History(swf.models.History):
         return self
 
     def add_child_workflow_started(self,
-                                   initiated_id,
-                                   name=None,
-                                   version=None):
+                                   initiated_id):
         initiated_event = self.events[initiated_id - 1]
         workflow_id = initiated_event.workflow_id
         workflow_type = initiated_event.workflow_type
@@ -669,4 +662,57 @@ class History(swf.models.History):
             }
         }))
 
+        return self
+
+    def add_marker(self, name, details=None):
+        self.events.append(EventFactory({
+            'eventId': self.next_id,
+            'eventTimestamp': new_timestamp_string(),
+            'eventType': 'MarkerRecorded',
+            'markerRecordedEventAttributes': {
+                'details': json_dumps(details) if details is not None else '{}',
+                'markerName': name,
+            }
+        }))
+
+        return self
+
+    def add_timer_started(self, timer_id, timeout, control=None, decision_id=0):
+        d = {
+            "decisionTaskCompletedEventId": decision_id,
+            'startToFireTimeout': str(timeout),
+            'timerId': timer_id,
+        }
+        if control is not None:
+            d['control'] = json_dumps(control)
+        self.events.append(EventFactory({
+            'eventId': self.next_id,
+            'eventTimestamp': new_timestamp_string(),
+            'eventType': 'TimerStarted',
+            'timerStartedEventAttributes': d
+        }))
+        return self
+
+    def add_timer_fired(self, timer_id, started_timer_id=0):
+        self.events.append(EventFactory({
+            'eventId': self.next_id,
+            'eventTimestamp': new_timestamp_string(),
+            'eventType': 'TimerFired',
+            'timerFiredEventAttributes': {
+                'timerId': timer_id,
+                'startedEventId': started_timer_id,
+            }
+        }))
+        return self
+
+    def add_timer_canceled(self, timer_id, started_timer_id=0):
+        self.events.append(EventFactory({
+            'eventId': self.next_id,
+            'eventTimestamp': new_timestamp_string(),
+            'eventType': 'TimerCanceled',
+            'timerCanceledEventAttributes': {
+                'timerId': timer_id,
+                'startedEventId': started_timer_id,
+            }
+        }))
         return self

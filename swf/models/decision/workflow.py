@@ -5,11 +5,9 @@
 #
 # See the file LICENSE for copying permission.
 
-import json
-
-from simpleflow.utils import json_dumps
-from swf.models.workflow import CHILD_POLICIES
+from simpleflow import format
 from swf.models.decision.base import Decision, decision_action
+from swf.models.workflow import CHILD_POLICIES
 
 
 class WorkflowExecutionDecision(Decision):
@@ -20,39 +18,43 @@ class WorkflowExecutionDecision(Decision):
         """Complete workflow execution decision builder
 
         :param  result: The result of the workflow execution
-        :type   result: str
+        :type   result: Optional[Any]
         """
-        self.update_attributes({'result': result})
+        self.update_attributes({
+            'result': format.result(result),
+        })
 
     @decision_action
     def cancel(self, details=None):
         """Cancel workflow execution decision builder
 
         :param  details: Optional details of the cancellation
-        :type   details: str
+        :type   details: Optional[Any]
         """
-        self.update_attributes({'details': details})
+        self.update_attributes({
+            'details': format.details(details),
+        })
 
     @decision_action
     def fail(self, details=None, reason=None):
         """Fail workflow execution decision builder
 
         :param  details: Optional details of the failure
-        :type   details: str
+        :type   details: Optional[Any]
 
         :param  reason: A descriptive reason for the failure that may help in diagnostics
-        :type   reason: str
+        :type   reason: Optional[str]
         """
         self.update_attributes({
-            'details': details,
-            'reason': reason
+            'details': format.details(details),
+            'reason': format.reason(reason),
         })
 
     @decision_action
     def terminate(self, reason=None, details=None):
         self.update_attributes({
-            'reason': reason,
-            'details': details,
+            'reason': format.reason(reason),
+            'details': format.details(details),
         })
 
     @decision_action
@@ -69,7 +71,7 @@ class WorkflowExecutionDecision(Decision):
         :type   execution_timeout: str
 
         :param  input: The input provided to the new workflow execution
-        :type   input: dict
+        :type   input: Optional[dict]
 
         :param  tag_list: list of tags to associate with the new workflow execution
         :type   tag_list: list
@@ -83,7 +85,8 @@ class WorkflowExecutionDecision(Decision):
         :param  workflow_type_version: workflow type version the execution shold belong to
         :type   workflow_type_version: str
         """
-        input = json_dumps(input) or None
+        if input is not None:
+            input = format.input(input)
 
         self.update_attributes({
             'childPolicy': child_policy,
@@ -106,7 +109,7 @@ class ChildWorkflowExecutionDecision(Decision):
         """Child workflow execution decision builder
 
         :param  workflow_type: workflow type to start
-        :type   workflow_type: str
+        :type   workflow_type: swf.models.workflow.WorkflowType
 
         :param  workflow_id: unique id to recognize the workflow execution
         :type   workflow_id: str
@@ -119,7 +122,7 @@ class ChildWorkflowExecutionDecision(Decision):
         :type   execution_timeout: str
 
         :param  input: The input provided to the child workflow execution
-        :type   input: str
+        :type   input: Optional[dict]
 
         :param  tag_list: list of tags to associate with the child workflow execution
         :type   tag_list: list
@@ -130,8 +133,15 @@ class ChildWorkflowExecutionDecision(Decision):
         :param  task_timeout: maximum duration of decision tasks for the child workflow execution
         :type   task_timeout: str
 
+        :param  control: data attached to the event that can be used by
+                  the decider in subsequent workflow tasks
+        :type   control: Optional[dict]
+
         """
-        input = json_dumps(input) or None
+        if input is not None:
+            input = format.input(input)
+        if control is not None:
+            control = format.control(control)
 
         self.update_attributes({
             'childPolicy': child_policy,
@@ -161,13 +171,16 @@ class ExternalWorkflowExecutionDecision(Decision):
         :param  workflow_id: id of the external workflow execution to cancel
         :type   workflow_id: str
 
-        :param  : data attached to the event that can be used by
+        :param  control: data attached to the event that can be used by
                   the decider in subsequent workflow tasks
-        :type   : str
+        :type   control: Optional[dict]
 
         :param  run_id: run id of the external workflow execution to cancel
         :type   run_id: str
         """
+        if control is not None:
+            control = format.control(control)
+
         self.update_attributes({
             'workflowId': workflow_id,
             'control': control,
@@ -188,15 +201,18 @@ class ExternalWorkflowExecutionDecision(Decision):
 
         :param  control: data attached to the event that can be used by the decider
                          in subsequent decision tasks
-        :type   control: str
+        :type   control: Optional[dict]
 
         :param  input: input to be provided with the signal
-        :type   input: str
+        :type   input: Optional[dict]
 
         :param  run_id: run id of the workflow execution to be signaled
         :type   run_id: str
         """
-        input = json_dumps(input) or None
+        if input is not None:
+            input = format.input(input)
+        if control is not None:
+            control = format.control(control)
 
         self.update_attributes({
             'signalName': signal_name,

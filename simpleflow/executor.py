@@ -3,6 +3,10 @@ import logging
 
 from ._decorators import deprecated
 
+if False:
+    from typing import Type
+    from simpleflow import Workflow
+
 __all__ = ['Executor']
 
 
@@ -30,7 +34,8 @@ class Executor(object):
     """
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, workflow):
+    def __init__(self, workflow_class):
+        # type: (Type[Workflow]) -> None
         """
         Binds the workflow's definition.
 
@@ -39,28 +44,42 @@ class Executor(object):
         as a program, the workflow, and an interpreter, the executor.
 
         """
-        self._workflow = workflow(self)
+        self._workflow_class = workflow_class
+        self._workflow = None
+
+    @property
+    def workflow_class(self):
+        return self._workflow_class
+
+    @property
+    def workflow(self):
+        return self._workflow
+
+    def create_workflow(self):
+        if self._workflow is None:
+            workflow = self._workflow_class(self)
+            if False:
+                assert isinstance(workflow, Workflow)
+            self._workflow = workflow
 
     def run_workflow(self, *args, **kwargs):
         """
         Runs the workflow definition.
 
         """
-        workflow = self._workflow
-        result = workflow.run(*args, **kwargs)
+        result = self._workflow.run(*args, **kwargs)
         return result
 
     @abc.abstractmethod
-    def submit(self, task, *args, **kwargs):
+    def submit(self, submittable, *args, **kwargs):
         """
         Submit a task for execution.
 
         :param task: activity or workflow.
-        :type  task: :py:class:`simpleflow.Activity`
-                   | :py:class:`simpleflow.Workflow`.
+        :type  task: base.Submittable | simpleflow.Activity | simpleflow.Workflow
 
         :returns:
-            :rtype: :py:class:`simpleflow.futures.Future`
+        :rtype: :py:class:`simpleflow.futures.Future`
 
         """
         raise NotImplementedError
@@ -68,7 +87,7 @@ class Executor(object):
     def map(self, callable, iterable):
         """Submit *callable* with each of the items in ``*iterables``.
 
-        All items in ``*iterables`` must be serializable in JSON.
+        All items in ``*iterable`` must be serializable in JSON.
 
         """
         return [self.submit(callable, argument) for
@@ -132,3 +151,36 @@ class Executor(object):
     @deprecated
     def before_run(self):
         return self.before_replay()
+
+    @deprecated
+    def get_execution_context(self):
+        return self.get_run_context()
+
+    def get_run_context(self):
+        """
+        Get the run context.
+        The content is specific to each executor.
+        :return: context
+        :rtype: dict
+        """
+        return {}
+
+    @abc.abstractmethod
+    def signal(self, name, *args, **kwargs):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def wait_signal(self, name):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def record_marker(self, name, details=None):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def list_markers(self, all=False):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def get_event_details(self, event_type, event_name):
+        raise NotImplementedError

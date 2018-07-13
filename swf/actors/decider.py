@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 import boto.exception
 
-from swf.models.history import History
-from swf.models.workflow import WorkflowExecution, WorkflowType
+from simpleflow import compat, format
+from simpleflow.utils import json_dumps
 from swf.actors.core import Actor
 from swf.exceptions import PollTimeout, ResponseError, DoesNotExistError
+from swf.models.history import History
+from swf.models.workflow import WorkflowExecution, WorkflowType
 from swf.responses import Response
 
 
@@ -15,10 +17,7 @@ class Decider(Actor):
     :type   domain: swf.models.Domain
 
     :param  task_list: task list the Actor should watch for tasks on
-    :type   task_list: string
-
-    :param  last_token: last seen task token
-    :type   last_token: string
+    :type   task_list: str
     """
     def __init__(self, domain, task_list):
         super(Decider, self).__init__(
@@ -32,26 +31,31 @@ class Decider(Actor):
         the task with `task_token``
 
         :param  task_token: completed decision task token
-        :type   task_token: string
+        :type   task_token: str
 
         :param  decisions: The list of decisions (possibly empty)
                            made by the decider while processing this decision task
-        :type   decisions: list (of swf.models.decision.Decision)
+        :type   decisions: list[swf.models.decision.base.Decision]
+        :param execution_context: User-defined context to add to workflow execution.
+        :type execution_context: str
         """
+        if execution_context is not None and not isinstance(execution_context, compat.string_types):
+            execution_context = json_dumps(execution_context)
         try:
             self.connection.respond_decision_task_completed(
                 task_token,
                 decisions,
-                execution_context,
+                format.execution_context(execution_context),
             )
         except boto.exception.SWFResponseError as e:
+            message = self.get_error_message(e)
             if e.error_code == 'UnknownResourceFault':
                 raise DoesNotExistError(
                     "Unable to complete decision task with token={}".format(task_token),
-                    e.body['message'],
+                    message,
                 )
 
-            raise ResponseError(e.body['message'])
+            raise ResponseError(message)
 
     def poll(self, task_list=None,
              identity=None,
@@ -61,15 +65,15 @@ class Decider(Actor):
         workflow's events.
 
         :param task_list: task list to poll for decision tasks from.
-        :type task_list: string
+        :type task_list: str
 
         :param identity: Identity of the decider making the request,
         which is recorded in the DecisionTaskStarted event in the
         workflow history.
-        :type identity: string
+        :type identity: str
 
         :returns: a Response object with history, token, and execution set
-        :rtype: swf.responses.Response(token, history, execution)
+        :rtype: swf.responses.Response
 
         """
         task_list = task_list or self.task_list
@@ -77,7 +81,7 @@ class Decider(Actor):
         task = self.connection.poll_for_decision_task(
             self.domain.name,
             task_list=task_list,
-            identity=identity,
+            identity=format.identity(identity),
             **kwargs
         )
         token = task.get('taskToken')
@@ -92,18 +96,19 @@ class Decider(Actor):
                 task = self.connection.poll_for_decision_task(
                     self.domain.name,
                     task_list=task_list,
-                    identity=identity,
+                    identity=format.identity(identity),
                     next_page_token=next_page,
                     **kwargs
                 )
             except boto.exception.SWFResponseError as e:
+                message = self.get_error_message(e)
                 if e.error_code == 'UnknownResourceFault':
                     raise DoesNotExistError(
                         "Unable to poll decision task",
-                        e.body['message'],
+                        message,
                     )
 
-                raise ResponseError(e.body['message'])
+                raise ResponseError(message)
 
             token = task.get('taskToken')
             if token is None:

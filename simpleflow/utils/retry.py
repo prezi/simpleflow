@@ -21,9 +21,12 @@ def constant(value):
 
 
 def exponential(value):
+    """
+    Set retry time exponentially; per the "+ 1," begin at a minimum of one second.
+    """
     import random
 
-    return random.random() * (2 ** value)
+    return random.random() * (2 ** value) + 1
 
 
 def with_delay(
@@ -42,33 +45,39 @@ def with_delay(
     :type  delay: callable(value: int) -> int
 
     :param on_exceptions: retry only when these exceptions raise.
-    :type  on_exceptions: Sequence([Exception])
+    :type  on_exceptions: Exception | Sequence([Exception])
 
     :param except_on: don't retry on these exceptions.
     :type  except_on: Sequence([Exception])
+
+    :param log_with: logger instance to use.
     """
     if log_with is None:
         log_with = logging.getLogger(__name__).info
+    if except_on is None:
+        except_on = ()  # Can't "except None" in py3
 
     def decorate(func):
         @functools.wraps(func)
         def decorated(*args, **kwargs):
             nb_retries = 0
-            while nb_times - nb_retries:
+            while True:
                 try:
                     return func(*args, **kwargs)
-                except except_on as error:
+                except except_on:
                     raise
                 except on_exceptions as error:
                     wait_delay = delay(nb_retries)
                     log_with(
-                        'error "%s": retrying in %.2f seconds',
+                        'error "%r": retrying in %.2f seconds',
                         error,
                         wait_delay,
                     )
                     time.sleep(wait_delay)
                     nb_retries += 1
-            raise
+                    if nb_times - nb_retries <= 0:
+                        raise
+
         return decorated
 
     on_exceptions = _to_tuple(on_exceptions)

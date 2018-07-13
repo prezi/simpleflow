@@ -5,9 +5,7 @@
 #
 # See the file LICENSE for copying permission.
 
-import json
-
-from simpleflow.utils import json_dumps
+from simpleflow import format
 from swf.models.decision.base import Decision, decision_action
 
 
@@ -30,7 +28,7 @@ class ActivityTaskDecision(Decision):
                  control=None, heartbeat_timeout=None,
                  input=None, duration_timeout=None,
                  schedule_timeout=None, task_timeout=None,
-                 task_list=None):
+                 task_list=None, task_priority=None):
         """Schedule activity task decision builder
 
         :param  activity_id: activity id of the activity task
@@ -40,13 +38,14 @@ class ActivityTaskDecision(Decision):
         :type   activity_type: swf.models.activity.ActivityType
 
         :param  control: data attached to the event that can be used by the decider in subsequent workflow tasks
-        :type   control: String
+        :type   control: Optional[dict]
 
-        :param  heartbeat_timeout: Specifies the maximum time before which a worker processing a task of this type must report progress
+        :param  heartbeat_timeout: Specifies the maximum time before which a worker processing a task of this type must
+                report progress
         :type   heartbeat_timeout: String
 
         :param  input: input provided to the activity task
-        :type   input: dict
+        :type   input: Optional[dict]
 
         :param  duration_timeout: Maximum duration for this activity task
         :type   duration_timeout: String
@@ -57,10 +56,21 @@ class ActivityTaskDecision(Decision):
         :param  task_timeout: Specifies the maximum duration a worker may take to process this activity task
         :type   task_timeout: String
 
-        :param  : Specifies the name of the task list in which to schedule the activity task
+        :param  task_list: Specifies the name of the task list in which to schedule the activity task
         :type   :str
+
+        :param  task_priority: Specifies the numeric priority of the task to pass to SWF (defaults to None).
+        :type   task_priority: int|String
         """
-        input = json_dumps(input) or None
+        if input is not None:
+            input = format.input(input)
+        if control is not None:
+            control = format.control(control)
+
+        if task_priority is not None:
+            # NB: here we call int() so we raise early if a wrong task priority
+            # is passed to this function.
+            task_priority = str(int(task_priority))
 
         self.update_attributes({
             'activityId': activity_id,
@@ -75,4 +85,5 @@ class ActivityTaskDecision(Decision):
             'scheduleToStartTimeout': schedule_timeout,
             'startToCloseTimeout': task_timeout,
             'taskList': {'name': task_list},
+            'taskPriority': task_priority,
         })

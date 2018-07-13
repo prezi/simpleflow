@@ -1,13 +1,14 @@
 # See README for more informations about integration tests
 
-import simpleflow.command
 from click.testing import CliRunner
+from flaky import flaky
 from sure import expect
 
-from . import vcr, IntegrationTest
+import simpleflow.command
+from . import vcr, VCRIntegrationTest
 
 
-class TestSimpleflowCommand(IntegrationTest):
+class TestSimpleflowCommand(VCRIntegrationTest):
     def invoke(self, command, arguments):
         if not hasattr(self, "runner"):
             self.runner = CliRunner()
@@ -70,7 +71,7 @@ class TestSimpleflowCommand(IntegrationTest):
         expect(result.exit_code).to.equal(0)
         expect(result.output).to.equal("")
 
-
+    @flaky(max_runs=2)
     @vcr.use_cassette
     def test_simpleflow_activity_rerun(self):
         """
@@ -80,7 +81,7 @@ class TestSimpleflowCommand(IntegrationTest):
         result = self.invoke(
             simpleflow.command.cli,
             "standalone --workflow-id %s --input {\"args\":[0]} --nb-workers 1 " \
-            "tests.integration.workflow.SleepWorkflow" % self.workflow_id
+            "--nb-deciders 1 tests.integration.workflow.SleepWorkflow" % self.workflow_id
         )
         expect(result.exit_code).to.equal(0)
         lines = result.output.split("\n")
@@ -99,14 +100,46 @@ class TestSimpleflowCommand(IntegrationTest):
         expect(result.exit_code).to.equal(0)
         expect(result.output).to.contain("will sleep 0s")
 
+    @flaky(max_runs=2)
+    @vcr.use_cassette
+    def test_simpleflow_idempotent(self):
+        result = self.invoke(
+            simpleflow.command.cli,
+            "standalone --workflow-id %s --input {}"
+            " --nb-deciders 2 --nb-workers 2"
+            " tests.integration.workflow.ATestDefinitionWithIdempotentTask" % self.workflow_id
+        )
+        expect(result.exit_code).to.equal(0)
+        lines = result.output.split("\n")
+        start_line = [line for line in lines if line.startswith(self.workflow_id)][0]
+        _, run_id = start_line.split(" ", 1)
 
-    # TODO: simpleflow decider.start
-    # TODO: simpleflow standalone
-    # TODO: simpleflow task.info
-    # TODO: simpleflow worker.start
-    # TODO: simpleflow workflow.filter
-    # TODO: simpleflow workflow.info
-    # TODO: simpleflow workflow.list
-    # TODO: simpleflow workflow.profile
-    # TODO: simpleflow workflow.restart
-    # TODO: simpleflow workflow.tasks
+        events = self.get_events(run_id)
+
+        activities = [
+            e['activityTaskScheduledEventAttributes']['activityId']
+            for e in events
+            if (
+                e['eventType'] == 'ActivityTaskScheduled' and
+                e['activityTaskScheduledEventAttributes']['activityType']['name'] == 'tests.integration.workflow'
+                                                                                     '.get_uuid')
+        ]
+        expect(activities).should.have.length_of(2)
+        expect(activities[0]).should.be.different_of(activities[1])
+
+        failures = [
+            e['scheduleActivityTaskFailedEventAttributes']['cause'] for e in events if
+            e['eventType'] == 'ScheduleActivityTaskFailed'
+        ]
+        expect(failures).should_not.contain('ACTIVITY_ID_ALREADY_IN_USE')
+
+# TODO: simpleflow decider.start
+# TODO: simpleflow standalone
+# TODO: simpleflow task.info
+# TODO: simpleflow worker.start
+# TODO: simpleflow workflow.filter
+# TODO: simpleflow workflow.info
+# TODO: simpleflow workflow.list
+# TODO: simpleflow workflow.profile
+# TODO: simpleflow workflow.restart
+# TODO: simpleflow workflow.tasks

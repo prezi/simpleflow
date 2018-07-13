@@ -1,22 +1,24 @@
 from __future__ import absolute_import
 
 import getpass
+import json
 import os
 import socket
-from importlib import import_module
+
+from future.utils import iteritems
 
 import swf.exceptions
 import swf.models
 import swf.querysets
-from simpleflow.activity import Activity
+from simpleflow.dispatch import dynamic_dispatcher
 from simpleflow.utils import json_dumps
-
 from .stats import pretty
 
 __all__ = [
     'show_workflow_profile',
     'show_workflow_status',
     'list_workflow_executions',
+    'swf_identity',
 ]
 
 
@@ -78,7 +80,7 @@ def list_workflow_executions(domain_name, *args, **kwargs):
     query = swf.querysets.WorkflowExecutionQuerySet(domain)
     executions = query.all(*args, **kwargs)
 
-    return pretty.list(executions)
+    return pretty.list_executions(executions)
 
 
 def filter_workflow_executions(domain_name, status, tag,
@@ -97,9 +99,14 @@ def find_activity(history, scheduled_id=None, activity_id=None, input=None):
     """
     Finds an activity in a given workflow execution and returns a callable,
     some args and some kwargs so we can re-execute it.
+
+    :type history: simpleflow.history.History
+    :type scheduled_id: str
+    :type activity_id: str
+    :type input: Optional[dict[str, Any]]
     """
     found_activity = None
-    for _, params in history._activities.items():
+    for _, params in iteritems(history.activities):
         if params["scheduled_id"] == scheduled_id:
             found_activity = params
         if params["id"] == activity_id:
@@ -108,12 +115,10 @@ def find_activity(history, scheduled_id=None, activity_id=None, input=None):
     if not found_activity:
         raise ValueError("Couldn't find activity.")
 
-    # get the callable
-    module_name, method_name = found_activity["name"].rsplit('.', 1)
-    module = import_module(module_name)
-    func = getattr(module, method_name)
-    if isinstance(func, Activity):
-        func = func._callable
+    # get the activity
+    activity_str = found_activity["name"]
+    dispatcher = dynamic_dispatcher.Dispatcher()
+    activity = dispatcher.dispatch_activity(activity_str)
 
     # get the input
     input_ = input or found_activity["input"]
@@ -121,9 +126,10 @@ def find_activity(history, scheduled_id=None, activity_id=None, input=None):
         input_ = {}
     args = input_.get('args', ())
     kwargs = input_.get('kwargs', {})
+    meta = input_.get('meta', {})
 
     # return everything
-    return func, args, kwargs, found_activity
+    return activity, args, kwargs, meta, found_activity
 
 
 def get_task(domain_name, workflow_id, task_id, details):
@@ -135,8 +141,24 @@ def get_task(domain_name, workflow_id, task_id, details):
 
 
 def swf_identity():
-    return json_dumps({
+    # basic identity
+    identity = {
         'user': getpass.getuser(),          # system's user
         'hostname': socket.gethostname(),   # main hostname
         'pid': os.getpid(),                 # current pid
-    })[:256]  # May truncate value to fit with SWF limits
+    }
+
+    # adapt with extra keys from env
+    if "SIMPLEFLOW_IDENTITY" in os.environ:
+        try:
+            extra_keys = json.loads(os.environ["SIMPLEFLOW_IDENTITY"])
+        except Exception:
+            extra_keys = {}
+        for key, value in iteritems(extra_keys):
+            identity[key] = value
+
+    # remove null values
+    identity = {k: v for k, v in iteritems(identity) if v is not None}
+
+    # serialize the result
+    return json_dumps(identity)

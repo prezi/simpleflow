@@ -12,12 +12,24 @@ from swf.models.history import History
 from swf.models.domain import Domain
 from swf.models.workflow import WorkflowType, WorkflowExecution
 
-from ..mocks.workflow import mock_describe_workflow_type,\
-                             mock_describe_workflow_execution
+from ..mocks.workflow import mock_describe_workflow_type, \
+    mock_describe_workflow_execution
 from ..mocks.event import mock_get_workflow_execution_history
 
+if 0:
+    # for PyCharm
+    patch.object = patch.object
 
-class TestWorkflowType(unittest.TestCase):
+
+class CustomAssertions(object):
+    def assertLength(self, a_list, count):
+        self.assertEqual(
+            len(a_list), count,
+            "Expected length to be {}, got {}. Object: {}".format(count, len(a_list), a_list)
+        )
+
+
+class TestWorkflowType(unittest.TestCase, CustomAssertions):
     def setUp(self):
         self.domain = Domain("test-domain")
         self.wt = WorkflowType(self.domain, "TestType", "1.0")
@@ -36,9 +48,9 @@ class TestWorkflowType(unittest.TestCase):
 
     def test___diff_with_different_workflow_type(self):
         with patch.object(
-            Layer1,
-            'describe_workflow_type',
-            mock_describe_workflow_type,
+                Layer1,
+                'describe_workflow_type',
+                mock_describe_workflow_type,
         ):
             workflow_type = WorkflowType(
                 self.domain,
@@ -48,7 +60,7 @@ class TestWorkflowType(unittest.TestCase):
             diffs = workflow_type._diff()
 
             self.assertIsNotNone(diffs)
-            self.assertEqual(len(diffs), 6)
+            self.assertLength(diffs, 6)
 
             self.assertTrue(hasattr(diffs[0], 'attr'))
             self.assertTrue(hasattr(diffs[0], 'local'))
@@ -56,9 +68,9 @@ class TestWorkflowType(unittest.TestCase):
 
     def test_workflow_type__diff_with_identical_workflow_type(self):
         with patch.object(
-            Layer1,
-            'describe_workflow_type',
-            mock_describe_workflow_type,
+                Layer1,
+                'describe_workflow_type',
+                mock_describe_workflow_type,
         ):
             mocked = mock_describe_workflow_type()
             workflow_type = WorkflowType(
@@ -77,7 +89,7 @@ class TestWorkflowType(unittest.TestCase):
 
             diffs = workflow_type._diff()
 
-            self.assertEqual(len(diffs), 0)
+            self.assertLength(diffs, 0)
 
     def test_exists_with_existing_workflow_type(self):
         with patch.object(Layer1, 'describe_workflow_type'):
@@ -86,12 +98,12 @@ class TestWorkflowType(unittest.TestCase):
     def test_exists_with_non_existent_workflow_type(self):
         with patch.object(self.wt.connection, 'describe_workflow_type') as mock:
             mock.side_effect = SWFResponseError(
-                    400,
-                    "Bad Request:",
-                    {'__type': 'com.amazonaws.swf.base.model#UnknownResourceFault',
-                     'message': 'Unknown type: WorkflowType=[workflowId=blah, runId=test]'},
-                    'UnknownResourceFault',
-                )
+                400,
+                "Bad Request:",
+                {'__type': 'com.amazonaws.swf.base.model#UnknownResourceFault',
+                 'message': 'Unknown type: WorkflowType=[workflowId=blah, runId=test]'},
+                'UnknownResourceFault',
+            )
 
             self.assertFalse(self.wt.exists)
 
@@ -101,14 +113,14 @@ class TestWorkflowType(unittest.TestCase):
         with patch.object(self.wt.connection, 'describe_workflow_type') as mock:
             with self.assertRaises(ResponseError):
                 mock.side_effect = SWFResponseError(
-                        400,
-                        "mocking exception",
-                        {
-                            '__type': 'WhateverError',
-                            'message': 'Whatever'
-                        }
+                    400,
+                    "mocking exception",
+                    {
+                        '__type': 'WhateverError',
+                        'message': 'Whatever'
+                    }
                 )
-                self.domain.exists
+                dummy = self.domain.exists
 
     def test_is_synced_with_unsynced_workflow_type(self):
         pass
@@ -118,9 +130,9 @@ class TestWorkflowType(unittest.TestCase):
 
     def test_is_synced_over_non_existent_workflow_type(self):
         with patch.object(
-            Layer1,
-            'describe_workflow_type',
-            mock_describe_workflow_type
+                Layer1,
+                'describe_workflow_type',
+                mock_describe_workflow_type
         ):
             workflow_type = WorkflowType(
                 self.domain,
@@ -131,9 +143,9 @@ class TestWorkflowType(unittest.TestCase):
 
     def test_changes_with_different_workflow_type(self):
         with patch.object(
-            Layer1,
-            'describe_workflow_type',
-            mock_describe_workflow_type,
+                Layer1,
+                'describe_workflow_type',
+                mock_describe_workflow_type,
         ):
             workflow_type = WorkflowType(
                 self.domain,
@@ -143,7 +155,7 @@ class TestWorkflowType(unittest.TestCase):
             diffs = workflow_type.changes
 
             self.assertIsNotNone(diffs)
-            self.assertEqual(len(diffs), 6)
+            self.assertLength(diffs, 6)
 
             self.assertTrue(hasattr(diffs[0], 'attr'))
             self.assertTrue(hasattr(diffs[0], 'local'))
@@ -151,13 +163,13 @@ class TestWorkflowType(unittest.TestCase):
 
     def test_workflow_type_changes_with_identical_workflow_type(self):
         with patch.object(
-            Layer1,
-            'describe_workflow_type',
-            mock_describe_workflow_type,
+                Layer1,
+                'describe_workflow_type',
+                mock_describe_workflow_type,
         ):
             mocked = mock_describe_workflow_type()
             workflow_type = WorkflowType(
-               self.domain,
+                self.domain,
                 name=mocked['typeInfo']['workflowType']['name'],
                 version=mocked['typeInfo']['workflowType']['version'],
                 status=mocked['typeInfo']['status'],
@@ -172,8 +184,7 @@ class TestWorkflowType(unittest.TestCase):
 
             diffs = workflow_type.changes
 
-            self.assertEqual(len(diffs), 0)
-
+            self.assertLength(diffs, 0)
 
     def test_save_already_existing_type(self):
         with patch.object(self.wt.connection, 'register_workflow_type') as mock:
@@ -221,7 +232,7 @@ class TestWorkflowType(unittest.TestCase):
                 self.wt.delete()
 
 
-class TestWorkflowExecution(unittest.TestCase):
+class TestWorkflowExecution(unittest.TestCase, CustomAssertions):
     def setUp(self):
         self.domain = Domain("TestDomain")
         self.wt = WorkflowType(self.domain, "TestType", "1.0")
@@ -249,9 +260,9 @@ class TestWorkflowExecution(unittest.TestCase):
 
     def test___diff_with_different_workflow_execution(self):
         with patch.object(
-            Layer1,
-            'describe_workflow_execution',
-            mock_describe_workflow_execution,
+                Layer1,
+                'describe_workflow_execution',
+                mock_describe_workflow_execution,
         ):
             workflow_execution = WorkflowExecution(
                 self.domain,
@@ -261,7 +272,7 @@ class TestWorkflowExecution(unittest.TestCase):
             diffs = workflow_execution._diff()
 
             self.assertIsNotNone(diffs)
-            self.assertEqual(len(diffs), 7)
+            self.assertLength(diffs, 7)
 
             self.assertTrue(hasattr(diffs[0], 'attr'))
             self.assertTrue(hasattr(diffs[0], 'local'))
@@ -269,9 +280,9 @@ class TestWorkflowExecution(unittest.TestCase):
 
     def test_workflow_execution__diff_with_identical_workflow_execution(self):
         with patch.object(
-            Layer1,
-            'describe_workflow_execution',
-            mock_describe_workflow_execution,
+                Layer1,
+                'describe_workflow_execution',
+                mock_describe_workflow_execution,
         ):
             mocked = mock_describe_workflow_execution()
             workflow_execution = WorkflowExecution(
@@ -288,7 +299,7 @@ class TestWorkflowExecution(unittest.TestCase):
 
             diffs = workflow_execution._diff()
 
-            self.assertEqual(len(diffs), 0)
+            self.assertLength(diffs, 0)
 
     def test_exists_with_existing_workflow_execution(self):
         with patch.object(Layer1, 'describe_workflow_execution'):
@@ -297,12 +308,12 @@ class TestWorkflowExecution(unittest.TestCase):
     def test_exists_with_non_existent_workflow_execution(self):
         with patch.object(self.we.connection, 'describe_workflow_execution') as mock:
             mock.side_effect = SWFResponseError(
-                    400,
-                    "Bad Request:",
-                    {'__type': 'com.amazonaws.swf.base.model#UnknownResourceFault',
-                     'message': 'Unknown execution: WorkflowExecution=[workflowId=blah, runId=test]'},
-                    'UnknownResourceFault',
-                )
+                400,
+                "Bad Request:",
+                {'__type': 'com.amazonaws.swf.base.model#UnknownResourceFault',
+                 'message': 'Unknown execution: WorkflowExecution=[workflowId=blah, runId=test]'},
+                'UnknownResourceFault',
+            )
 
             self.assertFalse(self.we.exists)
 
@@ -312,14 +323,14 @@ class TestWorkflowExecution(unittest.TestCase):
         with patch.object(self.we.connection, 'describe_workflow_execution') as mock:
             with self.assertRaises(ResponseError):
                 mock.side_effect = SWFResponseError(
-                        400,
-                        "mocking exception",
-                        {
-                            '__type': 'WhateverError',
-                            'message': 'Whatever'
-                        }
+                    400,
+                    "mocking exception",
+                    {
+                        '__type': 'WhateverError',
+                        'message': 'Whatever'
+                    }
                 )
-                self.domain.exists
+                dummy = self.domain.exists
 
     def test_is_synced_with_unsynced_workflow_execution(self):
         pass
@@ -329,9 +340,9 @@ class TestWorkflowExecution(unittest.TestCase):
 
     def test_is_synced_over_non_existent_workflow_execution(self):
         with patch.object(
-            Layer1,
-            'describe_workflow_execution',
-            mock_describe_workflow_execution
+                Layer1,
+                'describe_workflow_execution',
+                mock_describe_workflow_execution
         ):
             workflow_execution = WorkflowExecution(
                 self.domain,
@@ -342,9 +353,9 @@ class TestWorkflowExecution(unittest.TestCase):
 
     def test_changes_with_different_workflow_execution(self):
         with patch.object(
-            Layer1,
-            'describe_workflow_execution',
-            mock_describe_workflow_execution,
+                Layer1,
+                'describe_workflow_execution',
+                mock_describe_workflow_execution,
         ):
             workflow_execution = WorkflowExecution(
                 self.domain,
@@ -354,7 +365,7 @@ class TestWorkflowExecution(unittest.TestCase):
             diffs = workflow_execution.changes
 
             self.assertIsNotNone(diffs)
-            self.assertEqual(len(diffs), 7)
+            self.assertLength(diffs, 7)
 
             self.assertTrue(hasattr(diffs[0], 'attr'))
             self.assertTrue(hasattr(diffs[0], 'local'))
@@ -362,9 +373,9 @@ class TestWorkflowExecution(unittest.TestCase):
 
     def test_workflow_execution_changes_with_identical_workflow_execution(self):
         with patch.object(
-            Layer1,
-            'describe_workflow_execution',
-            mock_describe_workflow_execution,
+                Layer1,
+                'describe_workflow_execution',
+                mock_describe_workflow_execution,
         ):
             mocked = mock_describe_workflow_execution()
             workflow_execution = WorkflowExecution(
@@ -381,13 +392,13 @@ class TestWorkflowExecution(unittest.TestCase):
 
             diffs = workflow_execution.changes
 
-            self.assertEqual(len(diffs), 0)
+            self.assertLength(diffs, 0)
 
     def test_history(self):
         with patch.object(
-            self.we.connection,
-            'get_workflow_execution_history',
-            mock_get_workflow_execution_history
+                self.we.connection,
+                'get_workflow_execution_history',
+                mock_get_workflow_execution_history
         ):
             history = self.we.history()
             self.assertIsInstance(history, History)

@@ -1,3 +1,5 @@
+import logging
+
 import swf.models
 
 from simpleflow.swf.executor import Executor
@@ -6,22 +8,77 @@ from . import (
     DeciderPoller,
 )
 
+logger = logging.getLogger(__name__)
 
-def load_workflow(domain, workflow_name, task_list=None, repair_with=None,
-                  force_activities=None):
+
+def load_workflow_executor(domain, workflow_name, task_list=None, repair_with=None,
+                           force_activities=None,
+                           repair_workflow_id=None, repair_run_id=None,
+                           ):
+    """
+    Load a workflow executor.
+
+    :param domain:
+    :type domain: str | swf.models.Domain
+    :param workflow_name:
+    :type workflow_name: str
+    :param task_list:
+    :type task_list: Optional[str]
+    :param repair_with:
+    :type repair_with: Optional[simpleflow.history.History]
+    :param force_activities:
+    :type force_activities: Optional[str]
+    :param repair_workflow_id: workflow ID to repair
+    :type repair_workflow_id: Optional[str]
+    :param repair_run_id: run ID to repair
+    :type repair_run_id: Optional[str]
+    :return: Executor for this workflow
+    :rtype: Executor
+    """
+    logger.debug('load_workflow_executor(workflow_name="{}")'.format(workflow_name))
     module_name, object_name = workflow_name.rsplit('.', 1)
     module = __import__(module_name, fromlist=['*'])
 
     workflow = getattr(module, object_name)
-    return Executor(swf.models.Domain(domain), workflow, task_list,
-                    repair_with=repair_with, force_activities=force_activities)
+
+    # TODO: find the cause of this differentiated behaviour
+    if not isinstance(domain, swf.models.Domain):
+        domain = swf.models.Domain(domain)
+
+    return Executor(
+        domain, workflow, task_list,
+        repair_with=repair_with,
+        force_activities=force_activities,
+        repair_workflow_id=repair_workflow_id,
+        repair_run_id=repair_run_id,
+    )
 
 
 def make_decider_poller(workflows, domain, task_list, repair_with=None,
-                        force_activities=None):
+                        force_activities=None,
+                        is_standalone=False,
+                        repair_workflow_id=None, repair_run_id=None,
+                        ):
     """
-    Factory to build a decider.
-
+    Factory building a decider poller.
+    :param workflows:
+    :type workflows:
+    :param domain:
+    :type domain:
+    :param task_list:
+    :type task_list:
+    :param repair_with:
+    :type repair_with: Optional[simpleflow.history.History]
+    :param force_activities:
+    :type force_activities: Optional[str]
+    :param is_standalone: Whether the executor use this task list (and pass it to the workers)
+    :type is_standalone: bool
+    :param repair_workflow_id: workflow ID to repair
+    :type repair_workflow_id: Optional[str]
+    :param repair_run_id: run ID to repair
+    :type repair_run_id: Optional[str]
+    :return:
+    :rtype: DeciderPoller
     """
     if repair_with and len(workflows) != 1:
         # too complicated ; I even wonder why passing multiple workflows here is
@@ -30,18 +87,52 @@ def make_decider_poller(workflows, domain, task_list, repair_with=None,
         raise ValueError("Sorry you can't repair more than 1 workflow at once!")
 
     executors = [
-        load_workflow(domain, workflow, task_list, repair_with=repair_with,
-                      force_activities=force_activities)
+        load_workflow_executor(
+            domain, workflow, task_list if is_standalone else None,
+            repair_with=repair_with,
+            force_activities=force_activities,
+            repair_workflow_id=repair_workflow_id,
+            repair_run_id=repair_run_id,
+        )
         for workflow in workflows
         ]
     domain = swf.models.Domain(domain)
-    return DeciderPoller(executors, domain, task_list)
+    return DeciderPoller(executors, domain, task_list, is_standalone)
 
 
 def make_decider(workflows, domain, task_list, nb_children=None,
-                 repair_with=None, force_activities=None):
+                 repair_with=None, force_activities=None,
+                 is_standalone=False,
+                 repair_workflow_id=None, repair_run_id=None,
+                 ):
+    """
+    Instantiate a Decider.
+    :param workflows:
+    :type workflows: list[str]
+    :param domain:
+    :type domain: str
+    :param task_list:
+    :type task_list: str
+    :param nb_children:
+    :type nb_children: Optional[int]
+    :param repair_with: previous history
+    :type repair_with: Optional[simpleflow.history.History]
+    :param force_activities: Regex matching the activities to force
+    :type force_activities: Optional[str]
+    :param is_standalone: Whether the executor use this task list (and pass it to the workers)
+    :type is_standalone: bool
+    :param repair_workflow_id: workflow ID to repair
+    :type repair_workflow_id: Optional[str]
+    :param repair_run_id: run ID to repair
+    :type repair_run_id: Optional[str]
+    :return:
+    :rtype: Decider
+    """
     poller = make_decider_poller(workflows, domain, task_list,
                                  repair_with=repair_with,
                                  force_activities=force_activities,
+                                 is_standalone=is_standalone,
+                                 repair_workflow_id=repair_workflow_id,
+                                 repair_run_id=repair_run_id,
                                  )
     return Decider(poller, nb_children=nb_children)

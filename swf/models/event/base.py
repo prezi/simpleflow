@@ -5,11 +5,12 @@
 #
 # See the file LICENSE for copying permission.
 
-import json
-
 from datetime import datetime
-import pytz
 
+import pytz
+from future.utils import iteritems
+
+from simpleflow import format
 from swf.utils import camel_to_underscore, cached_property
 
 
@@ -60,6 +61,7 @@ class Event(object):
         self._state = state
         self._timestamp = timestamp
         self._input = {}
+        self._control = None
         self.raw = raw_data or {}
 
         self.process_attributes()
@@ -93,10 +95,18 @@ class Event(object):
 
     @input.setter
     def input(self, value):
-        self._input = json.loads(value)
+        self._input = format.decode(value)
+
+    @property
+    def control(self):
+        return self._control
+
+    @control.setter
+    def control(self, value):
+        self._control = format.decode(value)
 
     def process_attributes(self):
         """Processes the event raw_data attributes_key elements
         and sets current instance attributes accordingly"""
-        for key, value in self.raw[self._attributes_key].iteritems():
+        for key, value in iteritems(self.raw[self._attributes_key]):
             setattr(self, camel_to_underscore(key), value)
